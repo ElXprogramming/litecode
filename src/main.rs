@@ -4,6 +4,7 @@ mod formatter;
 mod language;
 mod sidebar;
 mod syntax;
+mod terminal;
 
 use std::path::PathBuf;
 

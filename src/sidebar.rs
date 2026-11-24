@@ -10,7 +10,7 @@ use gtk4::pango::EllipsizeMode;
 use gtk4::prelude::*;
 use gtk4::{
     Align, Box as GtkBox, Button, Entry, EventControllerKey, GestureClick, Label, Orientation,
-    PolicyType, PropagationPhase, ScrolledWindow,
+    PolicyType, Popover, PropagationPhase, ScrolledWindow,
 };
 
 use crate::language::Language;
@@ -33,11 +33,13 @@ pub struct ExplorerSidebar {
     tree_box: GtkBox,
     folder_label: Label,
     root_add_btn: Button,
+    context_popover: Popover,
     current_root: RefCell<Option<PathBuf>>,
     expanded_dirs: RefCell<HashSet<PathBuf>>,
     active_file: RefCell<Option<PathBuf>>,
     pending_create: RefCell<Option<PendingCreate>>,
     on_open_file: Rc<dyn Fn(PathBuf)>,
+    on_deleted: Rc<dyn Fn(&Path)>,
     on_status: Rc<dyn Fn(&str)>,
 }
 
@@ -45,6 +47,7 @@ impl ExplorerSidebar {
     pub fn new(
         on_open_file: Rc<dyn Fn(PathBuf)>,
         on_pick_folder: Rc<dyn Fn()>,
+        on_deleted: Rc<dyn Fn(&Path)>,
         on_status: Rc<dyn Fn(&str)>,
     ) -> Rc<Self> {
         let root = GtkBox::new(Orientation::Vertical, 0);
@@ -106,16 +109,23 @@ impl ExplorerSidebar {
         root.append(&workspace_row);
         root.append(&scrolled);
 
+        let context_popover = Popover::new();
+        context_popover.set_has_arrow(false);
+        context_popover.add_css_class("context-popover");
+        context_popover.set_parent(&root);
+
         let sidebar = Rc::new(Self {
             root,
             tree_box,
             folder_label,
             root_add_btn: root_add_btn.clone(),
+            context_popover,
             current_root: RefCell::new(None),
             expanded_dirs: RefCell::new(HashSet::new()),
             active_file: RefCell::new(None),
             pending_create: RefCell::new(None),
             on_open_file,
+            on_deleted,
             on_status,
         });
 
@@ -147,6 +157,10 @@ impl ExplorerSidebar {
 
         sidebar.rebuild_tree();
         sidebar
+    }
+
+    pub fn cleanup(&self) {
+        self.context_popover.unparent();
     }
 
     pub fn set_root_folder(self: &Rc<Self>, path: PathBuf) {
@@ -312,6 +326,7 @@ impl ExplorerSidebar {
 
         {
             let click = GestureClick::new();
+            click.set_button(gdk::BUTTON_PRIMARY);
             let sb_weak = Rc::downgrade(self);
             let owned = dir_path.to_path_buf();
             click.connect_released(move |_, _, _, _| {
@@ -337,6 +352,27 @@ impl ExplorerSidebar {
                     sb.open_creator_for(owned.clone(), CreateKind::File);
                 }
             });
+        }
+
+        {
+            let right_click = GestureClick::new();
+            right_click.set_button(gdk::BUTTON_SECONDARY);
+            let sb_weak = Rc::downgrade(self);
+            let row_weak = row.downgrade();
+            let owned = dir_path.to_path_buf();
+            right_click.connect_pressed(move |_, _, x, y| {
+                if let (Some(sb), Some(r)) = (sb_weak.upgrade(), row_weak.upgrade()) {
+                    let (px, py) = r
+                        .compute_point(
+                            &sb.root,
+                            &gtk4::graphene::Point::new(x as f32, y as f32),
+                        )
+                        .map(|pt| (pt.x() as i32, pt.y() as i32))
+                        .unwrap_or((x as i32, y as i32));
+                    sb.show_context_menu(owned.clone(), true, px, py);
+                }
+            });
+            row.add_controller(right_click);
         }
 
         row
@@ -603,18 +639,240 @@ impl ExplorerSidebar {
         row.append(&badge);
         row.append(&lbl);
 
-        let click = GestureClick::new();
-        let sb_weak = Rc::downgrade(self);
-        let owned = file_path.to_path_buf();
-        click.connect_released(move |_, _, _, _| {
-            if let Some(sb) = sb_weak.upgrade() {
-                (sb.on_open_file)(owned.clone());
-            }
-        });
-        row.add_controller(click);
+        {
+            let click = GestureClick::new();
+            click.set_button(gdk::BUTTON_PRIMARY);
+            let sb_weak = Rc::downgrade(self);
+            let owned = file_path.to_path_buf();
+            click.connect_released(move |_, _, _, _| {
+                if let Some(sb) = sb_weak.upgrade() {
+                    (sb.on_open_file)(owned.clone());
+                }
+            });
+            row.add_controller(click);
+        }
+
+        {
+            let right_click = GestureClick::new();
+            right_click.set_button(gdk::BUTTON_SECONDARY);
+            let sb_weak = Rc::downgrade(self);
+            let row_weak = row.downgrade();
+            let owned = file_path.to_path_buf();
+            right_click.connect_pressed(move |_, _, x, y| {
+                if let (Some(sb), Some(r)) = (sb_weak.upgrade(), row_weak.upgrade()) {
+                    let (px, py) = r
+                        .compute_point(
+                            &sb.root,
+                            &gtk4::graphene::Point::new(x as f32, y as f32),
+                        )
+                        .map(|pt| (pt.x() as i32, pt.y() as i32))
+                        .unwrap_or((x as i32, y as i32));
+                    sb.show_context_menu(owned.clone(), false, px, py);
+                }
+            });
+            row.add_controller(right_click);
+        }
 
         row
     }
+
+    fn show_context_menu(self: &Rc<Self>, target_path: PathBuf, is_dir: bool, px: i32, py: i32) {
+        let menu_box = GtkBox::new(Orientation::Vertical, 2);
+        menu_box.set_width_request(175);
+
+        if is_dir {
+            let new_file_btn = make_context_btn("New File…", "context-menu-btn");
+            {
+                let sb_weak = Rc::downgrade(self);
+                let p = target_path.clone();
+                new_file_btn.connect_clicked(move |_| {
+                    if let Some(sb) = sb_weak.upgrade() {
+                        sb.context_popover.popdown();
+                        sb.open_creator_for(p.clone(), CreateKind::File);
+                    }
+                });
+            }
+
+            let new_dir_btn = make_context_btn("New Folder…", "context-menu-btn");
+            {
+                let sb_weak = Rc::downgrade(self);
+                let p = target_path.clone();
+                new_dir_btn.connect_clicked(move |_| {
+                    if let Some(sb) = sb_weak.upgrade() {
+                        sb.context_popover.popdown();
+                        sb.open_creator_for(p.clone(), CreateKind::Directory);
+                    }
+                });
+            }
+
+            let sep = GtkBox::new(Orientation::Horizontal, 0);
+            sep.add_css_class("context-sep");
+
+            let delete_btn = make_context_btn("Delete Folder…", "context-menu-danger-btn");
+            {
+                let sb_weak = Rc::downgrade(self);
+                let p = target_path;
+                delete_btn.connect_clicked(move |_| {
+                    if let Some(sb) = sb_weak.upgrade() {
+                        sb.show_delete_confirm(p.clone(), true);
+                    }
+                });
+            }
+
+            menu_box.append(&new_file_btn);
+            menu_box.append(&new_dir_btn);
+            menu_box.append(&sep);
+            menu_box.append(&delete_btn);
+        } else {
+            let open_btn = make_context_btn("Open", "context-menu-btn");
+            {
+                let sb_weak = Rc::downgrade(self);
+                let p = target_path.clone();
+                open_btn.connect_clicked(move |_| {
+                    if let Some(sb) = sb_weak.upgrade() {
+                        sb.context_popover.popdown();
+                        (sb.on_open_file)(p.clone());
+                    }
+                });
+            }
+
+            let sep = GtkBox::new(Orientation::Horizontal, 0);
+            sep.add_css_class("context-sep");
+
+            let delete_btn = make_context_btn("Delete File…", "context-menu-danger-btn");
+            {
+                let sb_weak = Rc::downgrade(self);
+                let p = target_path;
+                delete_btn.connect_clicked(move |_| {
+                    if let Some(sb) = sb_weak.upgrade() {
+                        sb.show_delete_confirm(p.clone(), false);
+                    }
+                });
+            }
+
+            menu_box.append(&open_btn);
+            menu_box.append(&sep);
+            menu_box.append(&delete_btn);
+        }
+
+        self.context_popover.set_child(Some(&menu_box));
+        self.context_popover
+            .set_pointing_to(Some(&gdk::Rectangle::new(px, py, 1, 1)));
+        self.context_popover.popup();
+    }
+
+    fn show_delete_confirm(self: &Rc<Self>, target_path: PathBuf, is_dir: bool) {
+        let name = target_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("item");
+
+        let box_confirm = GtkBox::new(Orientation::Vertical, 6);
+        box_confirm.set_width_request(210);
+
+        let prompt_text = if is_dir {
+            format!("Delete folder '{name}' and all its contents?")
+        } else {
+            format!("Delete file '{name}'?")
+        };
+        let prompt_lbl = Label::new(Some(&prompt_text));
+        prompt_lbl.add_css_class("context-confirm-label");
+        prompt_lbl.set_wrap(true);
+        prompt_lbl.set_halign(Align::Start);
+
+        let btn_row = GtkBox::new(Orientation::Horizontal, 6);
+        btn_row.set_halign(Align::End);
+
+        let cancel_btn = Button::with_label("Cancel");
+        cancel_btn.add_css_class("sidebar-btn");
+        {
+            let sb_weak = Rc::downgrade(self);
+            cancel_btn.connect_clicked(move |_| {
+                if let Some(sb) = sb_weak.upgrade() {
+                    sb.context_popover.popdown();
+                }
+            });
+        }
+
+        let confirm_btn = Button::with_label("Delete");
+        confirm_btn.add_css_class("context-confirm-danger-btn");
+        {
+            let sb_weak = Rc::downgrade(self);
+            confirm_btn.connect_clicked(move |_| {
+                if let Some(sb) = sb_weak.upgrade() {
+                    sb.context_popover.popdown();
+                    sb.execute_delete(&target_path, is_dir);
+                }
+            });
+        }
+
+        btn_row.append(&cancel_btn);
+        btn_row.append(&confirm_btn);
+
+        box_confirm.append(&prompt_lbl);
+        box_confirm.append(&btn_row);
+
+        self.context_popover.set_child(Some(&box_confirm));
+    }
+
+    fn execute_delete(self: &Rc<Self>, target_path: &Path, is_dir: bool) {
+        let canonical = fs::canonicalize(target_path).unwrap_or_else(|_| target_path.to_path_buf());
+        if self.current_root.borrow().as_ref() == Some(&canonical) {
+            (self.on_status)("Cannot delete workspace root folder");
+            return;
+        }
+
+        let name = canonical
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("item")
+            .to_string();
+
+        let res = if is_dir {
+            fs::remove_dir_all(&canonical)
+        } else {
+            fs::remove_file(&canonical)
+        };
+
+        match res {
+            Ok(()) => {
+                self.expanded_dirs
+                    .borrow_mut()
+                    .retain(|d| !d.starts_with(&canonical));
+                if self
+                    .pending_create
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|p| p.parent_dir.starts_with(&canonical))
+                {
+                    *self.pending_create.borrow_mut() = None;
+                }
+                if self
+                    .active_file
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|f| f.starts_with(&canonical))
+                {
+                    *self.active_file.borrow_mut() = None;
+                }
+                self.rebuild_tree();
+                (self.on_deleted)(&canonical);
+                (self.on_status)(&format!("Deleted '{name}'"));
+            }
+            Err(e) => {
+                (self.on_status)(&format!("Failed to delete '{name}': {e}"));
+            }
+        }
+    }
+}
+
+fn make_context_btn(label_text: &str, css_class: &str) -> Button {
+    let lbl = Label::new(Some(label_text));
+    lbl.set_halign(Align::Start);
+    lbl.set_hexpand(true);
+    let btn = Button::builder().child(&lbl).build();
+    btn.add_css_class(css_class);
+    btn
 }
 
 fn should_skip_entry(name: &str) -> bool {

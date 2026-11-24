@@ -16,6 +16,7 @@ use gtk4::{
 use crate::editor::EditorTab;
 use crate::language::Language;
 use crate::sidebar::ExplorerSidebar;
+use crate::terminal::TerminalSidebar;
 
 struct TabEntry {
     id: String,
@@ -28,8 +29,12 @@ struct TabEntry {
 pub struct LiteCodeUi {
     pub window: ApplicationWindow,
     paned: Paned,
+    right_paned: Paned,
     sidebar: Rc<ExplorerSidebar>,
     sidebar_visible: Cell<bool>,
+    terminal: Rc<TerminalSidebar>,
+    terminal_visible: Cell<bool>,
+    terminal_toggle_btn: Button,
     tab_strip: GtkBox,
     editor_stack: Stack,
     tabs: RefCell<Vec<TabEntry>>,
@@ -55,8 +60,8 @@ impl LiteCodeUi {
         let window = ApplicationWindow::builder()
             .application(app)
             .title("LiteCode")
-            .default_width(1120)
-            .default_height(740)
+            .default_width(1260)
+            .default_height(760)
             .build();
 
         let app_root = GtkBox::new(Orientation::Vertical, 0);
@@ -112,6 +117,10 @@ impl LiteCodeUi {
         format_btn.add_css_class("format-primary-btn");
         format_btn.set_tooltip_text(Some("Auto-Format Indentation & Code (Ctrl+Shift+I / Alt+Shift+F)"));
 
+        let terminal_toggle_btn = Button::with_label(">_ Terminal");
+        terminal_toggle_btn.add_css_class("toolbar-btn");
+        terminal_toggle_btn.set_tooltip_text(Some("Toggle Right Terminal Sidebar (Ctrl+`)"));
+
         toolbar.append(&sidebar_toggle_btn);
         toolbar.append(&brand);
         toolbar.append(&new_btn);
@@ -123,6 +132,7 @@ impl LiteCodeUi {
         toolbar.append(&format_on_save);
         toolbar.append(&find_btn);
         toolbar.append(&format_btn);
+        toolbar.append(&terminal_toggle_btn);
 
         // 2. Editor Right Pane (Tab Bar + Optional Find Bar + Stack of Editors)
         let tab_strip = GtkBox::new(Orientation::Horizontal, 0);
@@ -225,6 +235,14 @@ impl LiteCodeUi {
                 }
             })
         };
+        let on_sidebar_deleted = {
+            let holder = ui_holder.clone();
+            Rc::new(move |deleted_path: &Path| {
+                if let Some(ui) = holder.borrow().as_ref() {
+                    ui.close_tabs_under_path(deleted_path);
+                }
+            })
+        };
         let on_sidebar_status = {
             let holder = ui_holder.clone();
             Rc::new(move |msg: &str| {
@@ -234,14 +252,42 @@ impl LiteCodeUi {
             })
         };
 
-        let sidebar =
-            ExplorerSidebar::new(on_sidebar_open, on_sidebar_pick_dir, on_sidebar_status);
+        let sidebar = ExplorerSidebar::new(
+            on_sidebar_open,
+            on_sidebar_pick_dir,
+            on_sidebar_deleted,
+            on_sidebar_status,
+        );
+
+        let on_terminal_hide = {
+            let holder = ui_holder.clone();
+            Rc::new(move || {
+                if let Some(ui) = holder.borrow().as_ref() {
+                    if ui.terminal_visible.get() {
+                        ui.toggle_terminal();
+                    }
+                }
+            })
+        };
+        let terminal = TerminalSidebar::new(on_terminal_hide);
+        terminal.root.set_visible(false);
+
+        let right_paned = Paned::new(Orientation::Horizontal);
+        right_paned.set_start_child(Some(&editor_pane));
+        right_paned.set_resize_start_child(true);
+        right_paned.set_shrink_start_child(false);
+        right_paned.set_end_child(Some(&terminal.root));
+        right_paned.set_resize_end_child(false);
+        right_paned.set_shrink_end_child(false);
+        right_paned.set_position(640);
+        right_paned.set_hexpand(true);
+        right_paned.set_vexpand(true);
 
         let paned = Paned::new(Orientation::Horizontal);
         paned.set_start_child(Some(&sidebar.root));
         paned.set_resize_start_child(false);
         paned.set_shrink_start_child(false);
-        paned.set_end_child(Some(&editor_pane));
+        paned.set_end_child(Some(&right_paned));
         paned.set_position(245);
         paned.set_hexpand(true);
         paned.set_vexpand(true);
@@ -255,8 +301,12 @@ impl LiteCodeUi {
         let ui = Rc::new(Self {
             window,
             paned,
+            right_paned,
             sidebar,
             sidebar_visible: Cell::new(true),
+            terminal,
+            terminal_visible: Cell::new(false),
+            terminal_toggle_btn: terminal_toggle_btn.clone(),
             tab_strip,
             editor_stack,
             tabs: RefCell::new(Vec::new()),
@@ -286,16 +336,21 @@ impl LiteCodeUi {
             &save_btn,
             &find_btn,
             &format_btn,
+            &terminal_toggle_btn,
             &find_prev_btn,
             &find_next_btn,
             &find_close_btn,
         );
         ui.wire_global_shortcuts();
 
-        // Clean up popover parent on window close
+        // Clean up popovers & terminal PTYs on window close
         {
             let pop = ui.lang_popover.clone();
+            let sb = ui.sidebar.clone();
+            let term = ui.terminal.clone();
             ui.window.connect_close_request(move |_| {
+                term.kill_all();
+                sb.cleanup();
                 pop.unparent();
                 glib::Propagation::Proceed
             });
@@ -345,6 +400,10 @@ impl LiteCodeUi {
             if let Ok(cwd) = std::env::current_dir() {
                 self.sidebar.set_root_folder(cwd);
             }
+        }
+
+        if let Some(root_dir) = self.sidebar.current_folder() {
+            self.terminal.set_working_directory(root_dir);
         }
 
         if !opened_any_file {
@@ -414,6 +473,7 @@ impl LiteCodeUi {
         save_btn: &Button,
         find_btn: &Button,
         format_btn: &Button,
+        terminal_toggle_btn: &Button,
         find_prev_btn: &Button,
         find_next_btn: &Button,
         find_close_btn: &Button,
@@ -445,6 +505,10 @@ impl LiteCodeUi {
         {
             let ui = self.clone();
             format_btn.connect_clicked(move |_| ui.format_active_tab());
+        }
+        {
+            let ui = self.clone();
+            terminal_toggle_btn.connect_clicked(move |_| ui.toggle_terminal());
         }
 
         // Find entry events
@@ -518,6 +582,18 @@ impl LiteCodeUi {
             let ctrl = state.contains(gdk::ModifierType::CONTROL_MASK);
             let shift = state.contains(gdk::ModifierType::SHIFT_MASK);
             let alt = state.contains(gdk::ModifierType::ALT_MASK);
+            let in_terminal = ui.terminal.has_terminal_focus();
+
+            // Ctrl+Shift+` -> Open New Terminal Tab in Right Sidebar
+            // Ctrl+` (grave) -> Toggle Right Terminal Sidebar
+            if ctrl && !alt && (key == gdk::Key::grave || key == gdk::Key::asciitilde) {
+                if shift {
+                    ui.open_new_terminal();
+                } else {
+                    ui.toggle_terminal();
+                }
+                return glib::Propagation::Stop;
+            }
 
             // Ctrl+Shift+I or Alt+Shift+F -> Auto-Format Code
             if (ctrl && shift && !alt && (key == gdk::Key::I || key == gdk::Key::i))
@@ -533,11 +609,16 @@ impl LiteCodeUi {
                         ui.save_current_tab(shift);
                         return glib::Propagation::Stop;
                     }
-                    gdk::Key::n | gdk::Key::N if !shift => {
+                    gdk::Key::b | gdk::Key::B if !shift => {
+                        ui.toggle_sidebar();
+                        return glib::Propagation::Stop;
+                    }
+                    // When terminal has focus, let Ctrl+W / Ctrl+N / Ctrl+F / Ctrl+Tab pass to the shell!
+                    gdk::Key::n | gdk::Key::N if !shift && !in_terminal => {
                         ui.new_untitled_tab("");
                         return glib::Propagation::Stop;
                     }
-                    gdk::Key::o | gdk::Key::O => {
+                    gdk::Key::o | gdk::Key::O if !in_terminal => {
                         if shift {
                             ui.prompt_open_folder();
                         } else {
@@ -545,21 +626,17 @@ impl LiteCodeUi {
                         }
                         return glib::Propagation::Stop;
                     }
-                    gdk::Key::w | gdk::Key::W if !shift => {
+                    gdk::Key::w | gdk::Key::W if !shift && !in_terminal => {
                         if let Some(active_id) = ui.active_tab_id.borrow().clone() {
                             ui.close_tab(&active_id);
                         }
                         return glib::Propagation::Stop;
                     }
-                    gdk::Key::b | gdk::Key::B if !shift => {
-                        ui.toggle_sidebar();
-                        return glib::Propagation::Stop;
-                    }
-                    gdk::Key::f | gdk::Key::F if !shift => {
+                    gdk::Key::f | gdk::Key::F if !shift && !in_terminal => {
                         ui.open_find_bar();
                         return glib::Propagation::Stop;
                     }
-                    gdk::Key::Tab | gdk::Key::ISO_Left_Tab => {
+                    gdk::Key::Tab | gdk::Key::ISO_Left_Tab if !in_terminal => {
                         ui.cycle_tab(shift);
                         return glib::Propagation::Stop;
                     }
@@ -775,6 +852,21 @@ impl LiteCodeUi {
         self.activate_tab(&next_id);
     }
 
+    pub fn close_tabs_under_path(self: &Rc<Self>, deleted_path: &Path) {
+        let ids_to_close: Vec<String> = self
+            .tabs
+            .borrow()
+            .iter()
+            .filter_map(|t| {
+                let p = t.editor.file_path.borrow().clone()?;
+                (p == deleted_path || p.starts_with(deleted_path)).then(|| t.id.clone())
+            })
+            .collect();
+        for id in ids_to_close {
+            self.close_tab(&id);
+        }
+    }
+
     fn current_editor(&self) -> Option<Rc<EditorTab>> {
         let active = self.active_tab_id.borrow().clone()?;
         self.tabs
@@ -888,6 +980,7 @@ impl LiteCodeUi {
             if let Ok(file) = res {
                 if let Some(path) = file.path() {
                     ui.sidebar.set_root_folder(path.clone());
+                    ui.terminal.set_working_directory(path.clone());
                     if !ui.sidebar_visible.get() {
                         ui.toggle_sidebar();
                     }
@@ -902,8 +995,50 @@ impl LiteCodeUi {
         self.sidebar_visible.set(next);
         self.sidebar.root.set_visible(next);
         if next && self.paned.position() < 120 {
-            self.paned.set_position(235);
+            self.paned.set_position(245);
         }
+    }
+
+    pub fn toggle_terminal(self: &Rc<Self>) {
+        let next = !self.terminal_visible.get();
+        self.terminal_visible.set(next);
+        self.terminal.root.set_visible(next);
+
+        if next {
+            self.terminal_toggle_btn.add_css_class("terminal-btn-active");
+            let total_w = self.right_paned.width();
+            if total_w > 500 && self.right_paned.position() > total_w - 300 {
+                self.right_paned.set_position((total_w - 390).max(360));
+            }
+            if let Some(folder) = self.sidebar.current_folder() {
+                self.terminal.set_working_directory(folder);
+            }
+            self.terminal.ensure_started();
+            self.terminal.focus_active();
+        } else {
+            self.terminal_toggle_btn
+                .remove_css_class("terminal-btn-active");
+            if let Some(ed) = self.current_editor() {
+                ed.text_view.grab_focus();
+            }
+        }
+    }
+
+    pub fn open_new_terminal(self: &Rc<Self>) {
+        if !self.terminal_visible.get() {
+            self.terminal_visible.set(true);
+            self.terminal.root.set_visible(true);
+            self.terminal_toggle_btn.add_css_class("terminal-btn-active");
+            let total_w = self.right_paned.width();
+            if total_w > 500 && self.right_paned.position() > total_w - 300 {
+                self.right_paned.set_position((total_w - 390).max(360));
+            }
+        }
+        if let Some(folder) = self.sidebar.current_folder() {
+            self.terminal.set_working_directory(folder);
+        }
+        let num = self.terminal.new_terminal();
+        self.set_status(&format!("Opened Terminal {num}"));
     }
 
     fn open_find_bar(&self) {
