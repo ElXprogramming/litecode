@@ -1,0 +1,298 @@
+window,
+.app-root {
+    background-color: #1e1e1e;
+    color: #cccccc;
+    font-family: "Inter", "Cantarell", "Noto Sans", sans-serif;
+    font-size: 13px;
+}
+
+/* Top VS Code-style Command / Header Bar */
+.top-toolbar {
+    background-color: #181818;
+    border-bottom: 1px solid #2b2b2b;
+    padding: 4px 10px;
+    min-height: 34px;
+}
+
+.brand-label {
+    color: #007acc;
+    font-weight: 700;
+    font-size: 13px;
+    margin-right: 6px;
+}
+
+.toolbar-btn {
+    background: transparent;
+    color: #cccccc;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 3px 9px;
+    min-height: 24px;
+    font-size: 12px;
+}
+
+.toolbar-btn:hover {
+    background-color: #2a2d2e;
+    color: #ffffff;
+}
+
+.format-primary-btn {
+    background-color: #0e639c;
+    color: #ffffff;
+    border: 1px solid #1177bb;
+    border-radius: 4px;
+    padding: 3px 12px;
+    min-height: 24px;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.format-primary-btn:hover {
+    background-color: #1177bb;
+}
+
+.toggle-pill {
+    background: #252526;
+    color: #9d9d9d;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    padding: 2px 8px;
+    min-height: 24px;
+    font-size: 11px;
+}
+
+.toggle-pill:checked {
+    background-color: #1f3a4d;
+    color: #75beff;
+    border-color: #007acc;
+}
+
+/* Explorer Sidebar */
+.sidebar-panel {
+    background-color: #252526;
+    border-right: 1px solid #2b2b2b;
+}
+
+.sidebar-header {
+    padding: 6px 10px;
+    background-color: #252526;
+}
+
+.sidebar-title {
+    color: #bbbbbb;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+}
+
+.sidebar-btn {
+    background: #313132;
+    color: #cccccc;
+    border: 1px solid #3c3c3c;
+    border-radius: 3px;
+    padding: 1px 6px;
+    min-height: 20px;
+    font-size: 11px;
+}
+
+.sidebar-btn:hover {
+    background-color: #3e3e40;
+    color: #ffffff;
+}
+
+.sidebar-workspace-name {
+    padding: 4px 10px 6px 10px;
+    color: #cccccc;
+    font-size: 11px;
+    font-weight: 700;
+    border-bottom: 1px solid #2d2d2d;
+}
+
+.sidebar-tree {
+    padding: 4px 0;
+}
+
+.sidebar-empty {
+    padding: 14px 12px;
+    color: #808080;
+    font-size: 12px;
+}
+
+.tree-row {
+    padding: 3px 8px 3px 4px;
+    border-radius: 3px;
+    margin: 0 4px;
+}
+
+.tree-row:hover {
+    background-color: #2a2d2e;
+}
+
+.tree-row-active {
+    background-color: #37373d;
+}
+
+.tree-chevron {
+    color: #9d9d9d;
+    font-size: 11px;
+}
+
+.tree-dir-label {
+    color: #cccccc;
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.tree-file-label {
+    color: #cccccc;
+    font-size: 12.5px;
+}
+
+/* File Type Badges (VS Code icon colors) */
+.file-badge {
+    font-family: "JetBrains Mono", "Fira Code", "Source Code Pro", monospace;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.badge-rust { color: #dea584; }
+.badge-c { color: #519aba; }
+.badge-cpp { color: #f34b7d; }
+.badge-py { color: #ffbc03; }
+.badge-js { color: #f1e05a; }
+.badge-ts { color: #3178c6; }
+.badge-json { color: #cbcb41; }
+.badge-html { color: #e34c26; }
+.badge-xml { color: #e37933; }
+.badge-css { color: #563d7c; }
+.badge-go { color: #00add8; }
+.badge-java { color: #b07219; }
+.badge-sh { color: #89e051; }
+.badge-lua { color: #51a0cf; }
+.badge-toml { color: #9c4221; }
+.badge-yaml { color: #cb171e; }
+.badge-md { color: #519aba; }
+.badge-txt { color: #858585; }
+
+/* Editor Tab Strip */
+.tab-strip-scroll {
+    background-color: #252526;
+    border-bottom: 1px solid #252526;
+    min-height: 35px;
+}
+
+.tab-strip {
+    background-color: #252526;
+}
+
+.editor-tab {
+    background-color: #2d2d2d;
+    color: #969696;
+    border-right: 1px solid #252526;
+    border-top: 2px solid transparent;
+    padding: 5px 8px 5px 12px;
+    min-height: 34px;
+}
+
+.editor-tab:hover {
+    background-color: #2a2d2e;
+    color: #cccccc;
+}
+
+.editor-tab-active {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border-top: 2px solid #007acc;
+}
+
+.tab-title {
+    font-size: 12.5px;
+}
+
+.tab-close-btn {
+    background: transparent;
+    color: #969696;
+    border: none;
+    border-radius: 3px;
+    padding: 0 5px;
+    min-height: 18px;
+    min-width: 18px;
+    font-size: 12px;
+}
+
+.tab-close-btn:hover {
+    background-color: #3c3c3c;
+    color: #ffffff;
+}
+
+/* Find Bar */
+.find-bar {
+    background-color: #252526;
+    border-bottom: 1px solid #3c3c3c;
+    padding: 5px 10px;
+}
+
+.find-entry {
+    background-color: #3c3c3c;
+    color: #cccccc;
+    border: 1px solid #007acc;
+    border-radius: 3px;
+    padding: 2px 8px;
+    min-height: 24px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12.5px;
+}
+
+.find-count {
+    color: #9d9d9d;
+    font-size: 11.5px;
+    margin: 0 6px;
+}
+
+/* Main Code Editor */
+.line-gutter {
+    background-color: #1e1e1e;
+}
+
+textview.code-view,
+textview.code-view text {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    caret-color: #aeafad;
+    font-family: "JetBrains Mono", "Fira Code", "Source Code Pro", "DejaVu Sans Mono", monospace;
+    font-size: 13.5px;
+}
+
+textview.code-view text selection {
+    background-color: #264f78;
+    color: #ffffff;
+}
+
+/* Bottom VS Code Status Bar */
+.status-bar {
+    background-color: #007acc;
+    color: #ffffff;
+    padding: 2px 10px;
+    min-height: 22px;
+    font-size: 11.5px;
+}
+
+.status-item {
+    color: #ffffff;
+    padding: 0 8px;
+    font-size: 11.5px;
+}
+
+.status-btn {
+    background: transparent;
+    color: #ffffff;
+    border: none;
+    border-radius: 2px;
+    padding: 0 8px;
+    min-height: 20px;
+    font-size: 11.5px;
+}
+
+.status-btn:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+}

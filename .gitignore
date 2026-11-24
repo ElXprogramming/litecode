@@ -1,0 +1,15 @@
+# Rust build artifacts
+/target
+
+# Arch Linux makepkg artifacts
+/pkg
+/packaging/pkg
+/packaging/src
+*.pkg.tar.zst
+*.pkg.tar.xz
+
+# Secrets / local environment
+.env
+.env.*
+*.pem
+*.key

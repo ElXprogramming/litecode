@@ -1,0 +1,29 @@
+# Maintainer: eldion
+pkgname=litecode
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Ultra-lightweight VS Code-inspired native GTK4 code editor & smart auto-formatter"
+arch=('x86_64' 'aarch64')
+license=('MIT')
+depends=('gtk4')
+makedepends=('cargo')
+optdepends=(
+  'rust: rustfmt formatting support'
+  'clang: clang-format C/C++/Java formatting support'
+  'prettier: JS/TS/HTML/CSS formatting support'
+  'ruff: fast Python formatting support'
+  'shfmt: shell script formatting support'
+)
+source=()
+
+build() {
+  cd "$startdir/.."
+  CARGO_TARGET_DIR=target cargo build --release --locked
+}
+
+package() {
+  cd "$startdir/.."
+  install -Dm755 "target/release/litecode" "$pkgdir/usr/bin/litecode"
+  install -Dm644 "packaging/litecode.desktop" "$pkgdir/usr/share/applications/litecode.desktop"
+  install -Dm644 "assets/litecode.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/litecode.svg"
+}

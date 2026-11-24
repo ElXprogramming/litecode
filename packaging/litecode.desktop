@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=LiteCode
+GenericName=Lightweight Code Editor
+Comment=Minimal VS Code-style code editor with smart auto-indentation
+Exec=litecode %F
+Icon=litecode
+Terminal=false
+Categories=Development;TextEditor;Utility;
+MimeType=text/plain;text/x-csrc;text/x-c++src;text/rust;text/x-python;application/javascript;application/json;text/html;text/css;text/x-shellscript;
+StartupNotify=true
+StartupWMClass=org.archlinux.litecode
