@@ -1,7 +1,7 @@
 # LiteCode
 
 An ultra-lightweight, native **Arch Linux** code editor inspired by **Code - OSS / VS Code**, stripped down to just the essentials:
-1. **Minimal VS Code Dark Editor** — Explorer folder sidebar, tabbed editing, syntax highlighting, line numbers, smart Enter/Tab auto-indentation, comment toggling, and instant Find.
+1. **Minimal VS Code Dark Editor** — Explorer folder sidebar with inline `+` file/folder creation on every directory, tabbed editing, syntax highlighting, line numbers, smart Enter/Tab auto-indentation, comment toggling, and instant Find.
 2. **Smart Auto-Formatter** — Built-in universal indentation formatter (C, C++, Rust, Python, JS/TS, HTML, XML, CSS, JSON, Go, Shell/`PKGBUILD`, Lua) plus seamless automatic use of system CLI formatters (`rustfmt`, `clang-format`, `prettier`, `ruff`/`black`, `gofmt`, `shfmt`, `xmllint`) when installed.
 
 ## Resource Comparison (Arch Linux)

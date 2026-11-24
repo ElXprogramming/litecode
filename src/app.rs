@@ -225,15 +225,24 @@ impl LiteCodeUi {
                 }
             })
         };
+        let on_sidebar_status = {
+            let holder = ui_holder.clone();
+            Rc::new(move |msg: &str| {
+                if let Some(ui) = holder.borrow().as_ref() {
+                    ui.set_status(msg);
+                }
+            })
+        };
 
-        let sidebar = ExplorerSidebar::new(on_sidebar_open, on_sidebar_pick_dir);
+        let sidebar =
+            ExplorerSidebar::new(on_sidebar_open, on_sidebar_pick_dir, on_sidebar_status);
 
         let paned = Paned::new(Orientation::Horizontal);
         paned.set_start_child(Some(&sidebar.root));
         paned.set_resize_start_child(false);
         paned.set_shrink_start_child(false);
         paned.set_end_child(Some(&editor_pane));
-        paned.set_position(235);
+        paned.set_position(245);
         paned.set_hexpand(true);
         paned.set_vexpand(true);
 

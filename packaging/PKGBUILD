@@ -4,6 +4,7 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc="Ultra-lightweight VS Code-inspired native GTK4 code editor & smart auto-formatter"
 arch=('x86_64' 'aarch64')
+url="https://github.com/ElXprogramming/litecode"
 license=('MIT')
 depends=('gtk4')
 makedepends=('cargo')
